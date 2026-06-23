@@ -1029,31 +1029,43 @@ footer{
       <button class="form-tab" id="tab-tecnico" onclick="switchTab('tecnico')">Soy técnico</button>
     </div>
 
+    <!-- MENSAJE DE ÉXITO -->
+    <div id="msg-success" style="display:none;background:#D1FAE5;border:1px solid #6EE7B7;border-radius:14px;padding:24px;text-align:center;margin-bottom:16px;">
+      <p style="font-size:28px;margin-bottom:8px;">🎉</p>
+      <p style="font-size:16px;font-weight:800;color:#065F46;margin-bottom:6px;">¡Registro exitoso!</p>
+      <p style="font-size:14px;color:#047857;" id="msg-success-text">Te contactaremos pronto.</p>
+    </div>
+
+    <!-- MENSAJE DE ERROR -->
+    <div id="msg-error" style="display:none;background:#FEE2E2;border:1px solid #FCA5A5;border-radius:14px;padding:16px;text-align:center;margin-bottom:16px;">
+      <p style="font-size:14px;font-weight:700;color:#991B1B;" id="msg-error-text">Ocurrió un error. Intenta de nuevo.</p>
+    </div>
+
     <div id="form-cliente">
       <div class="form-field">
         <label>Nombre completo</label>
-        <input type="text" placeholder="Ej: Carlos Herrera Pérez">
+        <input type="text" id="c-nombre" placeholder="Ej: Carlos Herrera Pérez">
       </div>
       <div class="form-field">
         <label>Teléfono</label>
-        <input type="tel" placeholder="999 123 4567">
+        <input type="tel" id="c-telefono" placeholder="999 123 4567">
       </div>
       <div class="form-field">
         <label>Colonia en Mérida</label>
-        <input type="text" placeholder="Ej: García Ginerés">
+        <input type="text" id="c-colonia" placeholder="Ej: García Ginerés">
       </div>
-      <button class="form-submit">Registrarme como cliente →</button>
+      <button class="form-submit" id="btn-cliente" onclick="registrarCliente()">Registrarme como cliente →</button>
       <p class="form-note">Recibirás confirmación por WhatsApp. Tus datos están seguros.</p>
     </div>
 
     <div id="form-tecnico" style="display:none;">
       <div class="form-field">
         <label>Nombre completo</label>
-        <input type="text" placeholder="Ej: José Manuel Tzuc">
+        <input type="text" id="t-nombre" placeholder="Ej: José Manuel Tzuc">
       </div>
       <div class="form-field">
         <label>Especialidad principal</label>
-        <select>
+        <select id="t-especialidad">
           <option value="">Selecciona tu oficio</option>
           <option>Electricista</option>
           <option>Plomero</option>
@@ -1067,18 +1079,19 @@ footer{
       </div>
       <div class="form-field">
         <label>Teléfono / WhatsApp</label>
-        <input type="tel" placeholder="999 123 4567">
+        <input type="tel" id="t-telefono" placeholder="999 123 4567">
       </div>
       <div class="form-field">
         <label>Años de experiencia</label>
-        <select>
+        <select id="t-experiencia">
+          <option value="">Selecciona</option>
           <option>1–2 años</option>
           <option>3–5 años</option>
           <option>6–10 años</option>
           <option>Más de 10 años</option>
         </select>
       </div>
-      <button class="form-submit">Registrarme como técnico →</button>
+      <button class="form-submit" id="btn-tecnico" onclick="registrarTecnico()">Registrarme como técnico →</button>
       <p class="form-note">Te contactaremos en menos de 24 horas para completar la verificación.</p>
     </div>
   </div>
@@ -1134,21 +1147,119 @@ footer{
 </footer>
 
 <script>
-// Scroll reveal
-const observer = new IntersectionObserver(entries => {
-  entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
-}, { threshold: 0.12 });
-document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+// ── SUPABASE CONFIG ──
+const SUPABASE_URL = 'https://oeqjjmehknycseujgsvh.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9lcWpqbWVoa255Y3NldWpnc3ZoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyNDUwNTAsImV4cCI6MjA5NzgyMTA1MH0.VmPrm2iHXVeUD7IwXuckqIm3yltsycYX26pl6t9Ch54';
 
-// Form tabs
+async function supabaseInsert(tabla, datos) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabla}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify(datos)
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.message || 'Error al guardar');
+  }
+  return true;
+}
+
+function showSuccess(msg) {
+  document.getElementById('msg-error').style.display = 'none';
+  document.getElementById('msg-success-text').textContent = msg;
+  document.getElementById('msg-success').style.display = 'block';
+  document.getElementById('msg-success').scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showError(msg) {
+  document.getElementById('msg-success').style.display = 'none';
+  document.getElementById('msg-error-text').textContent = msg;
+  document.getElementById('msg-error').style.display = 'block';
+}
+
+function setLoading(btnId, loading) {
+  const btn = document.getElementById(btnId);
+  btn.disabled = loading;
+  btn.textContent = loading ? 'Guardando...' : btn.dataset.label;
+}
+
+// ── REGISTRO CLIENTE ──
+async function registrarCliente() {
+  const nombre   = document.getElementById('c-nombre').value.trim();
+  const telefono = document.getElementById('c-telefono').value.trim();
+  const colonia  = document.getElementById('c-colonia').value.trim();
+
+  if (!nombre || !telefono) {
+    showError('Por favor ingresa tu nombre y teléfono.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-cliente');
+  btn.dataset.label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  try {
+    await supabaseInsert('clientes', { nombre, telefono, colonia });
+    document.getElementById('form-cliente').style.opacity = '0.4';
+    showSuccess('¡Registro exitoso! Te contactaremos por WhatsApp pronto.');
+  } catch(e) {
+    showError('Ocurrió un error. Intenta de nuevo o escríbenos al WhatsApp.');
+    btn.disabled = false;
+    btn.textContent = btn.dataset.label;
+  }
+}
+
+// ── REGISTRO TÉCNICO ──
+async function registrarTecnico() {
+  const nombre       = document.getElementById('t-nombre').value.trim();
+  const especialidad = document.getElementById('t-especialidad').value;
+  const telefono     = document.getElementById('t-telefono').value.trim();
+  const experiencia  = document.getElementById('t-experiencia').value;
+
+  if (!nombre || !especialidad || !telefono) {
+    showError('Por favor completa nombre, especialidad y teléfono.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-tecnico');
+  btn.dataset.label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Guardando...';
+
+  try {
+    await supabaseInsert('tecnicos', { nombre, especialidad, telefono, experiencia });
+    document.getElementById('form-tecnico').style.opacity = '0.4';
+    showSuccess('¡Registro exitoso! Te contactamos en menos de 24 horas para verificar tu perfil.');
+  } catch(e) {
+    showError('Ocurrió un error. Intenta de nuevo o escríbenos al WhatsApp.');
+    btn.disabled = false;
+    btn.textContent = btn.dataset.label;
+  }
+}
+
+// ── TABS ──
 function switchTab(type) {
   document.getElementById('tab-cliente').classList.toggle('active', type === 'cliente');
   document.getElementById('tab-tecnico').classList.toggle('active', type === 'tecnico');
   document.getElementById('form-cliente').style.display = type === 'cliente' ? 'block' : 'none';
   document.getElementById('form-tecnico').style.display = type === 'tecnico' ? 'block' : 'none';
+  document.getElementById('msg-success').style.display = 'none';
+  document.getElementById('msg-error').style.display = 'none';
 }
 
-// Smooth nav
+// ── SCROLL REVEAL ──
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting) e.target.classList.add('visible'); });
+}, { threshold: 0.12 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── SMOOTH NAV ──
 document.querySelectorAll('a[href^="#"]').forEach(a => {
   a.addEventListener('click', e => {
     const target = document.querySelector(a.getAttribute('href'));
